@@ -8,22 +8,21 @@
 - `Pillow>=10.0.0`
 - `matplotlib>=3.7.2`
 - `imageio>=2.31.0`
-- `tyro>=0.8.0` (for `visualize_viser.py`)
-- `viser>=0.2.0` (for `visualize_viser.py`)
+- `tyro>=0.8.0` and `viser>=0.2.0` (optional: `visualize_viser.py`)
 
-### Setup Instructions
+### Setup
 
-From the project root:
+From the repository root:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-If you need a specific PyTorch build (e.g. CUDA), install that first from [pytorch.org](https://pytorch.org), then install the rest from `requirements.txt`.
+For a CUDA PyTorch build, install from [pytorch.org](https://pytorch.org) first, then run the line above.
 
-## To run my code
+## Run
 
-All commands below assume the **repository root** as the working directory. You can instead `cd src` and run `python part1.py`, etc.; paths resolve from each script’s location.
+Paths are resolved from each script’s location; you can run from the repo root as shown or `cd src` and run `python part1.py`, etc.
 
 ### Part 1 — image fitting (MLP + positional encoding)
 
@@ -37,7 +36,7 @@ All commands below assume the **repository root** as the working directory. You 
 python src/part1.py
 ```
 
-### Part 1 — ablations and PSNR plot
+### Part 1 
 
 1. Requires **`web/assets/img1.jpg`**.
 2. Run:
@@ -46,7 +45,7 @@ python src/part1.py
 python src/part1_web_assets.py
 ```
 
-### Part 2 — NeRF on Lego
+### Part 2 
 
 1. Place **`data/lego_200x200.npz`** at the repo root (i.e. `data/lego_200x200.npz`).
 2. Run (training is slow on CPU; GPU recommended):

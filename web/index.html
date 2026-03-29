@@ -62,6 +62,15 @@
       border-radius: 4px;
     }
 
+    /* Animated GIFs: avoid over-wide decode issues in some WebKit builds */
+    img.gif-spherical {
+      width: 100%;
+      max-width: 900px;
+      margin-left: auto;
+      margin-right: auto;
+      display: block;
+    }
+
     .caption {
       font-size: 13px;
       color: #666;
@@ -79,7 +88,6 @@
 <h1>Homework 4: Neural Radiance Fields</h1>
 <p class="center"><strong>Grace Xu</strong> </p>
 
-<!-- ================= PART 1 ================= -->
 <div class="section">
   <h2>Part 1</h2>
 
@@ -137,7 +145,7 @@
       <p class="caption">L = 2, width = 256</p>
     </div>
     <div>
-      <img src="assets/img1_L10_w128.png" alt="L=4 width=128">
+      <img src="assets/img1_L10_w128.png" alt="L=10 width=128">
       <p class="caption">L = 10, width = 128</p>
     </div>
     <div>
@@ -174,9 +182,12 @@
 
   <h3>Training Progress</h3>
   <div class="img-grid">
-    <img src="assets/part2_iter1.png" alt="iter 1">
+    <img src="assets/part2_iter10.png" alt="iter 10">
+    <img src="assets/part2_iter100.png" alt="iter 100">
     <img src="assets/part2_iter500.png" alt="iter 500">
     <img src="assets/part2_iter1000.png" alt="iter 1000">
+    <img src="assets/part2_iter1500.png" alt="iter 1500">
+    <img src="assets/part2_iter2000.png" alt="iter 2000">
   </div>
 
   <h3>PSNR Curve</h3>
@@ -184,9 +195,15 @@
     <img src="assets/part2_psnr.png">
   </div>
 
-  <h3>Final Rendering</h3>
+  <h3>Final Rendering (Spherical Trajectory)</h3>
+
   <div class="img-grid">
-    <img src="assets/part2_final.png">
+    <img
+      src="assets/part2_spherical.gif"
+      alt="Camera orbit around the Lego scene"
+      loading="eager"
+      class="gif-spherical"
+    >
   </div>
 </div>
 
