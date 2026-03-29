@@ -19,22 +19,15 @@ from dataset_3d import load_data, get_rays_dataloader, pixels_to_rays
 from rendering import sample_along_rays, predict_rgbs
 from part1 import psnr_from_mse, save_image_rgb01
 
+_PART2_DEBUG = os.environ.get("PART2_DEBUG", "").strip() in ("1", "true", "yes", "on")
+
 
 def _gamma_dim(L: int) -> int:
     return 3 + 3 * 2 * L
 
 
 class Part2MLP(nn.Module):
-    """
-    NeRF-style MLP:
-    - input: 3D world coordinates + 3D viewing direction
-    - output: RGB in [0,1] and nonnegative density sigma
-
-    Matches the assignment requirements:
-    - positional encoding on xyz and direction
-    - deeper MLP than Part 1
-    - skip connection by concatenating encoded xyz mid-network
-    """
+    """NeRF-style MLP: world xyz + view dir → RGB (sigmoid) and density (softplus)."""
 
     def __init__(self, L_xyz: int = 10, L_dir: int = 4, hidden: int = 256):
         super().__init__()
@@ -108,7 +101,7 @@ class Part2MLP(nn.Module):
         for layer in self.post_skip:
             h = F.relu(layer(h))
 
-        sigma = F.relu(self.sigma_head(h))
+        sigma = F.softplus(self.sigma_head(h))
         feat = self.feature_head(h)
 
         hc = torch.cat([feat, gamma_d], dim=-1)
@@ -134,9 +127,6 @@ def render_view(
     device=None,
     chunk_rays: int = 4096,
 ):
-    """
-    Render a full image from one camera pose.
-    """
     if device is None:
         device = next(model.parameters()).device
     device = torch.device(device)
@@ -197,9 +187,6 @@ def evaluate_validation_set(
     device=None,
     chunk_rays: int = 4096,
 ):
-    """
-    Render all validation images and compute mean PSNR over the 6-val-image set.
-    """
     if device is None:
         device = next(model.parameters()).device
 
@@ -241,47 +228,32 @@ def plot_validation_psnr_curve(steps, psnrs, out_path: str):
     plt.close()
 
 
-def make_training_progress_figure(image_paths, step_labels, out_path: str):
-    """
-    Create a horizontal strip of saved renders across training.
-    """
-    imgs = [imageio.imread(p) for p in image_paths]
-
-    n = len(imgs)
-    plt.figure(figsize=(4 * n, 4))
-    for i, img in enumerate(imgs):
-        plt.subplot(1, n, i + 1)
-        plt.imshow(img)
-        plt.title(f"iter {step_labels[i]}")
-        plt.axis("off")
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=200)
-    plt.close()
-
-
 def train_part2(
     images_train,
     K,
     c2ws_train,
     images_val,
     c2ws_val,
-    num_iters: int = 1000,
+    num_iters: int = 2000,
     batch_rays: int = 2048,
     num_samples: int = 64,
     near: float = 2.0,
     far: float = 6.0,
     lr: float = 5e-4,
     log_every: int = 100,
-    render_every: int = 500,
     val_every: int = 500,
     out_dir: str = "out",
     device=None,
+    progress_render_steps: tuple[int, ...] = (
+        10,
+        100,
+        500,
+        1000,
+        1500,
+        2000,
+    ),
 ):
-    """
-    Train NeRF and save the main deliverables required by the assignment:
-    - intermediate renders across iterations
-    - validation PSNR curve
-    """
+    """Train NeRF; save progress renders, validation PSNR PNG, return model and logs."""
     os.makedirs(out_dir, exist_ok=True)
     os.makedirs(os.path.join(out_dir, "progress_renders"), exist_ok=True)
 
@@ -318,10 +290,12 @@ def train_part2(
 
     val_steps = []
     val_psnrs = []
-    progress_paths = []
-    progress_labels = []
+    progress_milestones = frozenset(progress_render_steps)
 
     H_val, W_val = images_val.shape[1], images_val.shape[2]
+
+    if _PART2_DEBUG:
+        print("[PART2_DEBUG=1] extra logging on")
 
     model.train()
     for step in range(1, num_iters + 1):
@@ -350,11 +324,37 @@ def train_part2(
             num_samples,
             device=dev_str,
         )
-
         loss = criterion(pred_rgb, target_rgb)
+
+        if _PART2_DEBUG and (step <= 3 or step % log_every == 0):
+            with torch.no_grad():
+                rgbs, sigmas = model(xyz, rays_d)
+                print(
+                    f"[PART2_DEBUG] step={step} | pred_rgb "
+                    f"mean={pred_rgb.mean().item():.4f} min={pred_rgb.min().item():.4f} max={pred_rgb.max().item():.4f}"
+                )
+                print(
+                    f"[PART2_DEBUG] step={step} | target "
+                    f"mean={target_rgb.mean().item():.4f} min={target_rgb.min().item():.4f} max={target_rgb.max().item():.4f}"
+                )
+                print(
+                    f"[PART2_DEBUG] step={step} | sigma "
+                    f"mean={sigmas.mean().item():.4e} max={sigmas.max().item():.4e} | "
+                    f"rgb_along_ray mean={rgbs.mean().item():.4f}"
+                )
 
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
+
+        if _PART2_DEBUG and step <= 5:
+            for name, p in model.named_parameters():
+                if p.grad is None:
+                    continue
+                if "sigma_head" in name or name.endswith("color_head_2.weight"):
+                    print(
+                        f"[PART2_DEBUG] step={step} | grad norm {name}: {p.grad.norm().item():.4e}"
+                    )
+
         optimizer.step()
 
         if step % log_every == 0 or step == 1:
@@ -363,8 +363,7 @@ def train_part2(
                 f"step {step}/{num_iters} | train loss {mse:.6f} | train PSNR {psnr_from_mse(mse):.4f} dB"
             )
 
-        # Save progression render of one fixed validation view
-        if step % render_every == 0 or step == 1:
+        if step in progress_milestones:
             with torch.no_grad():
                 val_img = render_view(
                     model,
@@ -379,11 +378,8 @@ def train_part2(
                 )
             render_path = os.path.join(out_dir, "progress_renders", f"iter_{step:06d}.png")
             save_image_rgb01(val_img, render_path)
-            progress_paths.append(render_path)
-            progress_labels.append(step)
             print(f"Saved training progression render: {render_path}")
 
-        # Evaluate PSNR on all 6 validation images
         if step % val_every == 0 or step == 1:
             mean_psnr, per_image_psnrs = evaluate_validation_set(
                 model,
@@ -401,26 +397,15 @@ def train_part2(
                 f"[validation] step {step}: mean PSNR over {len(per_image_psnrs)} val views = {mean_psnr:.4f} dB"
             )
 
-    # Save PSNR curve
     plot_validation_psnr_curve(
         val_steps,
         val_psnrs,
         os.path.join(out_dir, "validation_psnr_curve.png"),
     )
 
-    # Save montage of predicted images across iterations
-    if len(progress_paths) > 0:
-        make_training_progress_figure(
-            progress_paths,
-            progress_labels,
-            os.path.join(out_dir, "training_progression.png"),
-        )
-
     return model, {
         "val_steps": val_steps,
         "val_psnrs": val_psnrs,
-        "progress_paths": progress_paths,
-        "progress_labels": progress_labels,
     }
 
 
@@ -464,9 +449,7 @@ def render_spherical_video(
     fps: int = 12,
     device=None,
 ):
-    """
-    Render all provided test camera poses and save as GIF or MP4 depending on extension.
-    """
+    """Render test-camera trajectory to an animated GIF."""
     frames = []
     for i in range(len(c2ws_test)):
         c2w = torch.as_tensor(c2ws_test[i], dtype=torch.float32)
@@ -485,7 +468,14 @@ def render_spherical_video(
         frames.append(frame)
         print(f"Rendered test frame {i+1}/{len(c2ws_test)}")
 
-    imageio.mimsave(out_path, frames, fps=fps)
+    frame_dt = 1.0 / max(float(fps), 1e-6)
+    imageio.mimsave(
+        out_path,
+        frames,
+        format="GIF",
+        duration=frame_dt,
+        loop=0,
+    )
     print(f"Saved spherical render video: {out_path}")
 
 
@@ -506,13 +496,12 @@ if __name__ == "__main__":
     images_train, c2ws_train, images_val, c2ws_val, _, K = load_data(dp)
     K_t = torch.as_tensor(K, dtype=torch.float32)
 
-    num_iters = 1000
+    num_iters = 2000
     batch_rays = 2048
     num_samples = 64
     near_f, far_f = 2.0, 6.0
     lr = 5e-4
     log_every = 100
-    render_every = 500
     val_every = 500
     spherical_fps = 12
 
@@ -537,7 +526,6 @@ if __name__ == "__main__":
         far=far_f,
         lr=lr,
         log_every=log_every,
-        render_every=render_every,
         val_every=val_every,
         out_dir=out_dir,
         device=device,
@@ -551,9 +539,12 @@ if __name__ == "__main__":
 
     pr_dir = os.path.join(out_dir, "progress_renders")
     for step, name in (
-        (1, "part2_iter1.png"),
+        (10, "part2_iter10.png"),
         (100, "part2_iter100.png"),
         (500, "part2_iter500.png"),
+        (1000, "part2_iter1000.png"),
+        (1500, "part2_iter1500.png"),
+        (2000, "part2_iter2000.png"),
     ):
         src = os.path.join(pr_dir, f"iter_{step:06d}.png")
         dst = os.path.join(out_dir, name)

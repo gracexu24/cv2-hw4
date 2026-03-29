@@ -75,10 +75,10 @@ def volrend(
         rendered_colors: torch.Tensor of shape (num_pixels, 3) representing the accumulated color for each ray
     """
     step_size = (far - near) / num_samples_along_ray
-    delta = torch.tensor([step_size]).to(device)
+    delta = torch.tensor([step_size], device=sigmas.device, dtype=sigmas.dtype)
     T = batched_T_i(sigmas, delta)
 
-    weights = T * (1 - torch.exp(-1 * sigmas * delta)).to(device)
+    weights = T * (1.0 - torch.exp(-sigmas * delta))
 
     return torch.sum(weights * rgbs, dim=1)
 
