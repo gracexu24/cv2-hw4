@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
-import numpy as np
-from src.utils_part2 import batched_T_i
-from src.dataset_3d import pixels_to_rays
+from utils_part2 import batched_T_i
 
 
 def sample_along_rays(
@@ -29,8 +27,30 @@ def sample_along_rays(
         samples: torch.Tensor of shape (num_pixels, num_samples_along_ray, 3) representing
         the 3D positions of the samples along each ray
     """
-    # TODO implement yourself
-    return None
+    device = torch.device(device)
+    r_os = r_os.to(device)
+    r_ds = r_ds.to(device)
+    dtype = r_os.dtype
+
+    num_rays = r_os.shape[0]
+    n = num_samples_along_ray
+    if n < 1:
+        raise ValueError("num_samples_along_ray must be >= 1")
+
+    if n == 1:
+        t = torch.full((num_rays, 1), 0.5 * (near + far), device=device, dtype=dtype)
+    else:
+        bin_edges = torch.linspace(near, far, n + 1, device=device, dtype=dtype)
+        t_lo, t_hi = bin_edges[:-1], bin_edges[1:]
+        if perturb:
+            u = torch.rand(num_rays, n, device=device, dtype=dtype)
+            t = t_lo.unsqueeze(0) + u * (t_hi - t_lo).unsqueeze(0)
+        else:
+            t_mid = 0.5 * (t_lo + t_hi)
+            t = t_mid.unsqueeze(0).expand(num_rays, n)
+
+    samples = r_os.unsqueeze(1) + t.unsqueeze(-1) * r_ds.unsqueeze(1)
+    return samples
 
 
 def volrend(
@@ -70,6 +90,7 @@ def predict_rgbs(
     near: float,
     far: float,
     num_samples_along_ray: int,
+    device: str = "cuda",
 ):
     """Predict colors from a model.
 
@@ -80,9 +101,17 @@ def predict_rgbs(
         near: float representing the near plane distance
         far: float representing the far plane distance
         num_samples_along_ray: int representing the number of samples along each ray
+        device: str representing the device to run on
 
     Returns:
         predicted_rgbs: torch.Tensor of shape (num_pixels, 3) representing the predicted colors
     """
     rgbs, sigmas = model(xyzs, r_ds)
-    return volrend(sigmas, rgbs, near=near, far=far, num_samples_along_ray=num_samples_along_ray)
+    return volrend(
+        sigmas,
+        rgbs,
+        near=near,
+        far=far,
+        num_samples_along_ray=num_samples_along_ray,
+        device=device,
+    )

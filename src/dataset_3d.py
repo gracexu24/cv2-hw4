@@ -1,5 +1,5 @@
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 import numpy as np
 
 
@@ -149,8 +149,16 @@ def image_to_rays(
         torch.Tensor of shape (H, W, 6) where [:, :, :3] are ray origins
         and [:, :, 3:] are ray directions
     """
-    # TODO implement yourself
-    pass
+    image_t = torch.as_tensor(image)
+    H, W = image_t.shape[:2]
+    yy, xx = torch.meshgrid(
+        torch.arange(H, dtype=torch.float32),
+        torch.arange(W, dtype=torch.float32),
+        indexing="ij",
+    )
+    uvs = torch.stack([xx.reshape(-1), yy.reshape(-1)], dim=1)
+    r_os, r_ds = pixels_to_rays(K, c2w, uvs, verbose, device)
+    return torch.cat([r_os, r_ds], dim=-1).view(H, W, 6)
 
 
 def images_to_rays(
@@ -173,8 +181,11 @@ def images_to_rays(
         torch.Tensor of shape (num_images, H, W, 6) where [:, :, :, :3] are ray origins
         and [:, :, :, 3:] are ray directions
     """
-    # TODO implement yourself
-    pass
+    chunks = [
+        image_to_rays(images[i], c2ws[i], K, verbose, device)
+        for i in range(images.shape[0])
+    ]
+    return torch.stack(chunks, dim=0)
 
 
 class RaysData(Dataset):
@@ -224,8 +235,39 @@ class RaysData(Dataset):
         #   assert images[0, uvs[:, 1], uvs[:, 0]] == dataset.pixels[:]
         # Hint: torch.meshgrid with torch.arange(W) and torch.arange(H)
 
-        # TODO implement yourself
-        pass
+        device = torch.device(device)
+
+        self.images = torch.as_tensor(self.images, dtype=torch.float32).to(device)
+        self.K = torch.as_tensor(self.K, dtype=torch.float32)
+        self.c2ws = torch.as_tensor(self.c2ws, dtype=torch.float64)
+
+        yy, xx = torch.meshgrid(
+            torch.arange(self.h, dtype=torch.long),
+            torch.arange(self.w, dtype=torch.long),
+            indexing="ij",
+        )
+        uvs_single = torch.stack([xx.reshape(-1), yy.reshape(-1)], dim=1)
+        self.uvs = torch.cat([uvs_single] * self.num_images, dim=0)
+
+        self.gt_rgbs = self.images.reshape(-1, 3)
+
+        uvs_float = uvs_single.to(dtype=torch.float32)
+        rays_o_chunks = []
+        rays_d_chunks = []
+        for i in range(self.num_images):
+            r_o, r_d = pixels_to_rays(
+                self.K,
+                self.c2ws[i],
+                uvs_float,
+                verbose=False,
+                device=str(device),
+            )
+            rays_o_chunks.append(r_o)
+            rays_d_chunks.append(r_d)
+        self.rays_o = torch.cat(rays_o_chunks, dim=0)
+        self.rays_d = torch.cat(rays_d_chunks, dim=0)
+
+        self.split = split
 
     def __len__(self):
         """Return the total number of rays in the dataset.
@@ -233,8 +275,7 @@ class RaysData(Dataset):
         Returns:
             int representing num_images * H * W
         """
-        # TODO implement yourself
-        pass
+        return self.num_images * self.h * self.w
 
     def sample_rays(self, num_rays: int):
         """Sample random rays from the dataset.
@@ -250,5 +291,31 @@ class RaysData(Dataset):
         Hints:
             You need to randomly sample the rays and pixels using num_rays
         """
-        # TODO implement yourself
-        return None, None, None
+        n = len(self)
+        idx = torch.randint(0, n, (num_rays,), device=self.rays_o.device)
+        return self.rays_o[idx], self.rays_d[idx], self.gt_rgbs[idx]
+
+    def __getitem__(self, idx):
+        return self.rays_o[idx], self.rays_d[idx], self.gt_rgbs[idx]
+
+
+def get_rays_dataloader(
+    images,
+    K,
+    c2ws,
+    batch_size: int = 4096,
+    shuffle: bool = True,
+    num_workers: int = 0,
+    device: str = "cuda",
+    pin_memory=None,
+):
+    if pin_memory is None:
+        pin_memory = str(device).startswith("cuda") and torch.cuda.is_available()
+    dataset = RaysData(images, K, c2ws, device=device)
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+    )

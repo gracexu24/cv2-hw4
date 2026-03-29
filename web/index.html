@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>HW4: Neural Radiance Fields - Grace Xu</title>
+
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      margin: 40px auto;
+      max-width: 1100px;
+      line-height: 1.6;
+      color: #222;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+
+    h2 {
+      margin-top: 40px;
+      border-bottom: 2px solid #ddd;
+      padding-bottom: 6px;
+    }
+
+    h3 {
+      margin-top: 25px;
+      color: #444;
+    }
+
+    .section {
+      margin-bottom: 40px;
+    }
+
+    .box {
+      background: #f5f5f5;
+      padding: 16px;
+      border-radius: 6px;
+      margin: 15px 0;
+    }
+
+    ul {
+      margin-left: 20px;
+    }
+
+    li {
+      margin-bottom: 8px;
+    }
+
+    .img-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      margin-top: 15px;
+    }
+
+    img {
+      width: 100%;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+
+    .caption {
+      font-size: 13px;
+      color: #666;
+      margin-top: 5px;
+    }
+
+    .center {
+      text-align: center;
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>Homework 4: Neural Radiance Fields</h1>
+<p class="center"><strong>Grace Xu</strong> </p>
+
+<!-- ================= PART 1 ================= -->
+<div class="section">
+  <h2>Part 1</h2>
+
+  <h3>Model Architecture</h3>
+    <ul>
+      <li>Number of layers: 4</li>
+      <li>Positional encoding levels L: 10</li>
+      <li>Width: 256</li>
+      <li>Learning rate: 1e-2</li>
+      <li>Batch size: 10,000 pixels</li>
+      <li>Training iterations: 1000</li>
+    </ul>
+
+  <h3>Training Progression (Img 1)</h3>
+  <div class="img-grid">
+    <div>
+      <img src="assets/img1_progress_1.png" alt="Part 1 img1 start of training">
+      <p class="caption">Beginning </p>
+    </div>
+    <div>
+      <img src="assets/img1_progress_2.png" alt="Part 1 img1 mid training">
+      <p class="caption">~25% of training</p>
+    </div>
+    <div>
+      <img src="assets/img1_final.png" alt="Part 1 img1 final reconstruction">
+      <p class="caption">Final reconstruction</p>
+    </div>
+  </div>
+
+  <h3>Training Progression (Img 2)</h3>
+  <p class="caption">Same schedule as img1.</p>
+  <div class="img-grid">
+    <div>
+      <img src="assets/P1003638_progress_1.png" alt="Part 1 P1003638 start">
+      <p class="caption">Beginning</p>
+    </div>
+    <div>
+      <img src="assets/P1003638_progress_2.png" alt="Part 1 P1003638 mid">
+      <p class="caption">~25% of training</p>
+    </div>
+    <div>
+      <img src="assets/P1003638_final.png" alt="Part 1 P1003638 final">
+      <p class="caption">Final reconstruction</p>
+    </div>
+  </div>
+
+  <h3>Different L and Width Values</h3>
+  <div class="img-grid">
+    <div>
+      <img src="assets/img1_L2_w128.png" alt="L=2 width=128">
+      <p class="caption">L = 2, width = 128</p>
+    </div>
+    <div>
+      <img src="assets/img1_L2_w256.png" alt="L=2 width=256">
+      <p class="caption">L = 2, width = 256</p>
+    </div>
+    <div>
+      <img src="assets/img1_L10_w128.png" alt="L=4 width=128">
+      <p class="caption">L = 10, width = 128</p>
+    </div>
+    <div>
+      <img src="assets/img1_final.png" alt="">
+      <p class="caption">L = 10, width = 256</p>
+    </div>
+  </div>
+
+  <h3>PSNR Curve</h3>
+  <div class="img-grid">
+    <div>
+      <img src="assets/part1_psnr.png" alt="Part 1 PSNR vs training step">
+    </div>
+  </div>
+</div>
+
+<!-- ================= PART 2 ================= -->
+<div class="section">
+  <h2>Part 2</h2>
+
+  <h3>Implementation Overview</h3>
+    <ul>
+      <li>2.1: Create Rays from Cameras (already implemented)</li>
+      <li>2.2: Sampling - For each sampled ray, uniformly sample 3D points between the near and far bounds. During training I enable perturbation so the sample locations are randomly jittered within each interval, which helps reduce overfitting to a fixed set of sample depths.</li>
+      <li>2.3: Dataloader -  The dataloader samples rays from the training images.</li>
+      <li>2.4: Neural Radiance Field - Modified Part 1 MLP to take in different inputs (3D world coordinates and viewing directions) and output RGB color and density and increased depth based on hw instructions.</li>
+      <li>2.5: Volume Rendering (already implemented)</li>
+    </ul>
+
+  <h3>Ray & Sampling Visualization</h3>
+  <div class="img-grid">
+    <img src="assets/visualize.jpg" alt="Rays and samples">
+  </div>
+
+  <h3>Training Progress</h3>
+  <div class="img-grid">
+    <img src="assets/part2_iter1.png" alt="iter 1">
+    <img src="assets/part2_iter500.png" alt="iter 500">
+    <img src="assets/part2_iter1000.png" alt="iter 1000">
+  </div>
+
+  <h3>PSNR Curve</h3>
+  <div class="img-grid">
+    <img src="assets/part2_psnr.png">
+  </div>
+
+  <h3>Final Rendering</h3>
+  <div class="img-grid">
+    <img src="assets/part2_final.png">
+  </div>
+</div>
+
+</body>
+</html>

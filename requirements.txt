@@ -1,0 +1,8 @@
+# For GPU, install the CUDA build of PyTorch from https://pytorch.org if needed.
+torch>=2.1.0
+numpy>=1.24.3
+Pillow>=10.0.0
+matplotlib>=3.7.2
+imageio>=2.31.0
+tyro>=0.8.0
+viser>=0.2.0
