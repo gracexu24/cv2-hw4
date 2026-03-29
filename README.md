@@ -94,4 +94,4 @@ Open **`web/index.html`** in a browser. It loads figures from **`web/assets/`**.
 
 ## LLM usage
 
-Cursor / LLM assistance was used for HTML layout, README scaffolding, and incremental code edits (e.g. wiring assets, refactors).
+Cursor / LLM assistance was used for HTML layout, README, and some code edits.
